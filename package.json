@@ -1,5 +1,5 @@
 {
-  "name": "backendintro",
+  "name": "videotube",
   "version": "1.0.0",
   "description": "a basic app to deploy",
   "main": "index.js",
@@ -19,5 +19,6 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2"
-  }
+  },
+  "devDependencies": {}
 }

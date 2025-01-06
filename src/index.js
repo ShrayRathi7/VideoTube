@@ -6,7 +6,15 @@ dotenv.config({
     path: './.env'
 })
 
-connectDb()
+connectDb() //since there is async await with this function, so whenever there is async await await then the function always returns a promise so you can use .then() and .catch() methods with it
+.then(()=>{
+    app.listen(process.env.PORT || 8000, ()=>{
+        console.log(`Server is running at port : ${process.env.PORT}`)
+    })
+})
+.catch((err)=>{
+    console.log("MONGODB connection failed ",err)
+})
 
 
 // import {DB_NAME} from "./constants"

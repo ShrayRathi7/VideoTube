@@ -263,10 +263,144 @@ const refreshAccessToken = asyncHandler(async(req,res) => {
     }
 })
 
-export {registerUser,
-     loginUser,
-      logoutUser,
-       refreshAccessToken
+const changeCurrentPassword = asyncHandler(async(req,res) => {
+    const {oldPassword, newPassword} = req.body //user jab request bhejega tab vo dono password enter karega. Pehla hoga uska old password aur dusra hoga new password
+    //  console.log(req.body);
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword); //User ne jo old password bheja, vo compare hoga hashed password jo db mai store hai and this method will either either return true or false
+
+    if(!isPasswordCorrect) {
+        throw new apiError(400,"Invalid old password")
+    }
+
+    user.password =  newPassword //responsible for hashing the password before saving it to the database. This functionality is typically implemented in the User model using pre-save hooks.
+    await user.save({validateBeforeSave : false})
+
+    return res
+    .status(200)
+    .json(new apiResponse(
+        200,
+        {},
+        "Password changed successfully"
+    ))
+})
+
+const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res
+    .status(200)
+    .json(
+        200,
+        req.user,
+        "current user fetched successfully"
+    )
+})
+
+const updateAccountDetails = asyncHandler(async(req,res) => {
+    const {fullName, email} = req.body;
+
+    if(!fullName || !email) {
+        throw new apiError(400, "All fields are required")
+    }
+
+    const user = User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set : {
+                fullName : fullName,
+                email : email
+            }
+        },
+        {new : true} //Update hone ke baad ki jo info hai vo return hoti hai
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(200, user, "Account Details updated")
+    )
+}) 
+
+const updateUserAvatar = asyncHandler(async(req,res)=>{ 
+    const avatarLocalPath = req.file?.path // Multer adds a `file` object to the request (`req`), which contains details about the uploaded file. So, `req.file` would be the file that was uploaded. 
+
+    //The `path` property of the `file` object typically refers to the temporary location where the uploaded file is stored on the server. 
+    // So, `avatarLocalPath` is getting the local file path of the uploaded avatar image.
+    //when you upload a file using Multer, it gets saved to a temporary directory, and `path` gives you that location. Also, if there's no file uploaded, `req.file` would be undefined, so `avatarLocalPath` would be undefined as well. That's why optional chaining is used here to avoid errors.
+    
+    if(!avatarLocalPath) {
+        throw new apiError(400, "Avatar file is missing")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    if(!avatar.url){ //Whenever we upload something on cloudinary, in return we get a url 
+        throw new apiError(400, "Error while uploading avatar");
+    }
+
+   const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set : {
+                avatar : avatar.url
+            }
+        },
+        {new : true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            user,
+            "Avatar updated"
+        )
+    )
+})
+
+const updateUserCoverImage = asyncHandler(async(req,res)=>{
+    const coverImageLocalPath = req.file?.path
+
+    if(!coverImageLocalPath) {
+        throw new apiError(400, "Cover image file is missing");
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if(!coverImage.url) {
+        throw new apiError(400, "Error while uploading cover image on cloudinary")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set : {
+                coverImage : coverImage.url
+            }
+        },
+        {new : true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            user,
+            "Cover image updated"
+        )
+    )
+})
+
+export {
+       registerUser,
+       loginUser,
+       logoutUser,
+       refreshAccessToken,
+       getCurrentUser,
+       updateUserAvatar,
+       updateUserCoverImage
     }
 
  

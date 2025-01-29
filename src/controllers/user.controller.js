@@ -289,11 +289,11 @@ const changeCurrentPassword = asyncHandler(async(req,res) => {
 const getCurrentUser = asyncHandler(async(req,res)=>{
     return res
     .status(200)
-    .json(
+    .json( new apiResponse(
         200,
         req.user,
         "current user fetched successfully"
-    )
+    ))
 })
 
 const updateAccountDetails = asyncHandler(async(req,res) => {
@@ -303,7 +303,7 @@ const updateAccountDetails = asyncHandler(async(req,res) => {
         throw new apiError(400, "All fields are required")
     }
 
-    const user = User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set : {
@@ -393,6 +393,138 @@ const updateUserCoverImage = asyncHandler(async(req,res)=>{
     )
 })
 
+const getUserChannelProfile = asyncHandler(async(req,res)=>{
+     const{username} = req.params // Jab bhi ham kisi channel ko visit karte hai to hum actually mai us channel ke url pe visit karte hai e.g. : /chai-aur-code
+     //So, req.params is used for route parameters. For example, if the route is `/users/:username`, then `:username` is a parameter in the URL. So when a client makes a request to `/users/johndoe`, `req.params.username` would be "johndoe". This is part of the URL structure. 
+     //req.params is used to extract values from the URL path (route parameters).
+
+     if(!username?.trim()) {
+        throw new apiError(400, "username is missing")
+     }
+
+    const channel = await User.aggregate([
+        {
+            $match : { //similar to WHERE clause in SQL(Here we are looking for a user with a specific username)
+                username : username?.toLowerCase()
+            }
+        },
+        {
+            //to count the total subscribers of a channel
+            $lookup : {
+                from : "subscriptions",//model mai everything gets converted to lowercase and becomes plural (check in subscription.model.js, there name is Subscription)
+                localField : "_id",
+                foreignField : "channel",//To count the number of subscribers of a channel, count all the documents in which that particular channel name is appearing
+                as : "subscribers"
+            }
+        },
+        {
+            //to count the no. of channels a user has subscribed
+            $lookup : {
+                from : "subscriptions",
+                localField : "_id",
+                foreignField : "subscriber",
+                as : "subscribedTo"
+            }
+        },
+        {
+            $addFields : {
+                subscribersCount : {
+                    $size : "$subscribers" //'$' is liye bcz subscribers is now a field ('as' field of first lookup)
+                },
+                channelsSubscribedToCount : {
+                    $size : "$subscribedTo"
+                },
+                isSubscribed : {
+                    $cond : { //condition
+                        if : {$in : [req.user?._id, //to check if I (subscriber) am in the list of subscribers or not. If yes return true else false
+                             "$subscribers.subscriber"]},
+                             // subscribers is an array of documents (consisting of a list of subscribers who have subscribed to a particular channel) retrieved using $lookup from the "subscriptions" collection.
+                             // Each document in subscribers has a field subscriber, which holds the ID of a user who subscribed.
+                             // subscribers.subscriber extracts these user IDs into an array.
+                             // $in checks whether the logged-in user’s ID (req.user?._id) is inside this array.
+                        then : true,
+                        else : false
+                    }
+                }
+            }
+        },
+        {
+            $project : { //will provide only some values (not all). Basically it selects which fields to include in the output
+                fullName : 1, //1 means I am providing this value(fullName)
+                username : 1,
+                subscribersCount : 1,
+                channelsSubscribedToCount : 1,
+                isSubscribed : 1,
+                avatar : 1,
+                coverImage : 1,
+                email : 1
+            }
+        }
+
+    ])
+    //channel returns an array
+    if(!channel?.length) {
+        throw new apiError(404, "channel does not exist")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            channel[0],
+            "User channel fetched successfully"
+        )
+    )
+})
+
+const getWatchHistory = asyncHandler(async(req,res)=>{
+    const user = await User.aggregate([
+        {
+            $match : {
+                _id : new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup : {
+                from : "videos",
+                localField : "watchHistory",
+                foreignField : "_id",
+                as : "watchHistory",
+                pipeline : [ 
+                    {
+                        $lookup : {
+                            from : "users",
+                            localField : "owner",
+                            foreignField : "_id",
+                            as : "owner",
+                            pipeline : [
+                                {
+                                    $project : {
+                                        fullName : 1,
+                                        username : 1,
+                                        avatar : 1
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            user[0].watchHistory,
+            "Watch history fetched succesfully"
+        )
+    )
+})
+
 export {
        registerUser,
        loginUser,
@@ -400,7 +532,9 @@ export {
        refreshAccessToken,
        getCurrentUser,
        updateUserAvatar,
-       updateUserCoverImage
+       updateUserCoverImage,
+       getUserChannelProfile,
+       getWatchHistory
     }
 
  
